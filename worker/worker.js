@@ -9,7 +9,7 @@
  * วิธี deploy: ดู README.md ในโฟลเดอร์ worker/
  */
 
-const TUNNEL_URL = "https://make-ohio-controversy-pressure.trycloudflare.com";
+const TUNNEL_URL = "https://answer-infringement-full-signed.trycloudflare.com";
 // หรือถ้าตั้ง named tunnel ไว้กับ domain ตัวเอง:
 // const TUNNEL_URL = "https://scada-api.yourdomain.com";
 

@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 
 import psycopg2
-import pydotenv
+import dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
