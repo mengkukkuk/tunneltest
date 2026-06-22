@@ -1,0 +1,7 @@
+name = "scada-deploy-test"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# ตั้งค่า tunnel URL จริงตรงนี้ (override ค่า hardcode ใน worker.js)
+[vars]
+TUNNEL_URL = "https://make-ohio-controversy-pressure.trycloudflare.com"

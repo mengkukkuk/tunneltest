@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SCADA Deploy Test</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --ok: #3fb950;
+    --fail: #f85149;
+    --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--text);
+  }
+  .sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .row:last-of-type { border-bottom: none; }
+  .label { color: var(--muted); }
+  .value { font-weight: 600; }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: var(--muted);
+  }
+  .dot.ok { background: var(--ok); }
+  .dot.fail { background: var(--fail); }
+  .dot.pending {
+    background: var(--accent);
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+  button {
+    width: 100%;
+    margin-top: 18px;
+    padding: 10px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .log {
+    margin-top: 16px;
+    font-size: 11px;
+    color: var(--muted);
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    max-height: 140px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  input {
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: inherit;
+  }
+  label.field {
+    font-size: 11px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>SCADA Deploy Test</h1>
+    <div class="sub">GitHub Pages → Cloudflare Worker → Tunnel → PostgreSQL</div>
+
+    <label class="field" for="apiUrl">Worker API URL</label>
+    <input id="apiUrl" type="text" placeholder="https://your-worker.workers.dev" />
+
+    <div class="row">
+      <span class="label"><span class="dot" id="dot-worker"></span>Worker reachable</span>
+      <span class="value" id="val-worker">—</span>
+    </div>
+    <div class="row">
+      <span class="label"><span class="dot" id="dot-tunnel"></span>Backend health</span>
+      <span class="value" id="val-tunnel">—</span>
+    </div>
+    <div class="row">
+      <span class="label"><span class="dot" id="dot-db"></span>PostgreSQL connect</span>
+      <span class="value" id="val-db">—</span>
+    </div>
+
+    <button id="runBtn">Run test</button>
+
+    <div class="log" id="log">Waiting to run…</div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (msg) => {
+  const el = $("log");
+  const time = new Date().toLocaleTimeString();
+  el.textContent += `\n[${time}] ${msg}`;
+  el.scrollTop = el.scrollHeight;
+};
+const setStatus = (key, ok, text) => {
+  $(`dot-${key}`).className = "dot " + (ok === null ? "pending" : ok ? "ok" : "fail");
+  $(`val-${key}`).textContent = text;
+};
+
+// persist worker URL in the input across reloads (in-memory only per skill rules: no localStorage)
+$("apiUrl").value = "";
+
+$("runBtn").addEventListener("click", async () => {
+  const base = $("apiUrl").value.trim().replace(/\/$/, "");
+  if (!base) {
+    log("Error: กรอก Worker API URL ก่อน");
+    return;
+  }
+  $("runBtn").disabled = true;
+  $("log").textContent = "เริ่มทดสอบ...";
+
+  setStatus("worker", null, "checking…");
+  setStatus("tunnel", null, "—");
+  setStatus("db", null, "—");
+
+  // Step 1 + 2: hit /health (this also proves the worker is reachable)
+  try {
+    const res = await fetch(`${base}/health`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    setStatus("worker", true, "OK");
+    setStatus("tunnel", true, data.status);
+    log(`/health -> ${JSON.stringify(data)}`);
+  } catch (err) {
+    setStatus("worker", false, "FAIL");
+    setStatus("tunnel", false, "unreachable");
+    setStatus("db", false, "skipped");
+    log(`/health error: ${err.message}`);
+    $("runBtn").disabled = false;
+    return;
+  }
+
+  // Step 3: hit /db-check
+  setStatus("db", null, "checking…");
+  try {
+    const res = await fetch(`${base}/db-check`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    setStatus("db", true, "Connected");
+    log(`/db-check -> ${data.message}`);
+  } catch (err) {
+    setStatus("db", false, "FAIL");
+    log(`/db-check error: ${err.message}`);
+  }
+
+  $("runBtn").disabled = false;
+});
+</script>
+</body>
+</html>
